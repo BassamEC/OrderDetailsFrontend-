@@ -1,6 +1,6 @@
 ﻿import requests
 import io
-from config import ENVIRONMENT, LOCAL_URL, AZURE_URL
+from config import BASE_URL  # Updated import - use BASE_URL instead
 import pandas as pd
 
 def call_backend(file_content: bytes, filename: str) -> dict:
@@ -14,14 +14,12 @@ def call_backend(file_content: bytes, filename: str) -> dict:
     Returns:
         dict: Response from the backend
     """
-    url = AZURE_URL if ENVIRONMENT == 'azure' else LOCAL_URL
-    
     try:
         # Create a file-like object from the bytes content
         files = {'file': (filename, io.BytesIO(file_content), 'text/csv')}
         
-        # Send POST request to backend
-        response = requests.post(f"{url}/cluster", files=files)
+        # Send POST request to backend - using BASE_URL from config
+        response = requests.post(f"{BASE_URL}/cluster", files=files)
         
         if response.status_code != 200:
             return {"error": f"HTTP {response.status_code}: {response.text}"}
@@ -52,6 +50,7 @@ country_to_continent = {
     for continent, countries in continent_to_countries.items()
     for country in countries
 }
+
 def customer_continent_graph(df: pd.DataFrame) -> pd.DataFrame:
     """Generate chart data by continent."""
     # Count occurrences of each country
@@ -91,16 +90,13 @@ def call_continent_analysis_backend(file_content, filename):
               Or {"error": "error message"} if failed
     """
     try:
-        # Replace with your actual backend URL
-        backend_url = LOCAL_URL # Update this URL
-        
         # Prepare the file for upload
         files = {
             'file': (filename, file_content, 'text/csv')
         }
         
-        # Make the POST request to backend
-        response = requests.post(f"{backend_url}/continent-analysis", files=files, timeout=60)
+        # Make the POST request to backend - using BASE_URL from config
+        response = requests.post(f"{BASE_URL}/continent-analysis", files=files, timeout=60)
         
         # Check if request was successful
         if response.status_code == 200:
