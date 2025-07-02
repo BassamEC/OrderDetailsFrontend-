@@ -17,7 +17,11 @@ import matplotlib.pyplot as plt # Import plt to ensure we can close figures prop
 st.set_page_config(layout="wide")
 
 # Azure Function Configuration
-AZURE_FUNCTION_URL = st.secrets["azure"]["function_url"]  # Update with your actual URL
+function_url = st.secrets["azure"]["function_url"]  # Update with your actual URL
+function_key = st.secrets["azure"]["function_key"]
+
+url_with_key = f"{function_url}?code={function_key}"
+
 
 def call_azure_function(company_identifier):
     """Call Azure Function to get company data"""
@@ -28,7 +32,7 @@ def call_azure_function(company_identifier):
         }
         
         response = requests.post(
-            AZURE_FUNCTION_URL,
+            url_with_key,
             json=payload,
             headers={"Content-Type": "application/json"},
             timeout=30
