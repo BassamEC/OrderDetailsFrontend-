@@ -28,7 +28,7 @@ def call_azure_function(company_identifier):
     try:
         payload = {
             "company_identifier": company_identifier,
-            "password": "1234"
+            "password": st.secrets["azure"]["password"]  # Use the password from secrets
         }
         
         response = requests.post(
