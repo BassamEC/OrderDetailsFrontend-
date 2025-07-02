@@ -4,5 +4,3 @@ requests
 seaborn
 plotly
 matplotlib
-io
-base64
