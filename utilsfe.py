@@ -7,7 +7,7 @@ import streamlit as st
 function_url = st.secrets["azure"]["function_url"]  # Update with your actual URL
 function_key = st.secrets["azure"]["function_key"]
 
-url_with_key = f"{function_url}/cluster?code={function_key}"
+
 def call_backend(file_content: bytes, filename: str) -> dict:
     """
     Send file content to the backend for clustering
@@ -22,7 +22,7 @@ def call_backend(file_content: bytes, filename: str) -> dict:
     try:
         # Create a file-like object from the bytes content
         files = {'file': (filename, io.BytesIO(file_content), 'text/csv')}
-        
+        url_with_key = f"{function_url}/cluster?code={function_key}"
         # Send POST request to backend - using BASE_URL from config
         response = requests.post(url_with_key,
             # json=payload,
@@ -105,7 +105,13 @@ def call_continent_analysis_backend(file_content, filename):
         }
         
         # Make the POST request to backend - using BASE_URL from config
-        response = requests.post(f"{BASE_URL}/continent-analysis", files=files, timeout=60)
+        url_with_key = f"{function_url}/continent-analysis?code={function_key}"
+        # Send POST request to backend - using BASE_URL from config
+        response = requests.post(url_with_key,
+            # json=payload,
+            files=files,
+            
+            timeout=30)
         
         # Check if request was successful
         if response.status_code == 200:
