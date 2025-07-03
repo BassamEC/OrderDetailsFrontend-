@@ -123,8 +123,8 @@ def call_continent_analysis_backend(file_content, filename):
             
     except requests.exceptions.Timeout:
         return {"error": "Backend request timed out. Please try again."}
-    except requests.exceptions.ConnectionError:
-        return {"error": "Could not connect to backend server. Please check if the server is running."}
+    except requests.exceptions.ConnectionError as e:
+        return {"error":f"Could not connect to backend server. Please check if the server is running.  {str(e)}"}
     except requests.exceptions.RequestException as e:
         return {"error": f"Request failed: {str(e)}"}
     except Exception as e:
