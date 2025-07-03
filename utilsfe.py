@@ -26,7 +26,8 @@ def call_backend(file_content: bytes, filename: str) -> dict:
         # Send POST request to backend - using BASE_URL from config
         response = requests.post(url_with_key,
             # json=payload,
-            headers={"Content-Type": "application/json"},
+            files=files,
+            
             timeout=30)
         
         if response.status_code != 200:
