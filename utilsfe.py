@@ -2,7 +2,12 @@
 import io
 from config import BASE_URL  # Updated import - use BASE_URL instead
 import pandas as pd
+import streamlit as st
 
+function_url = st.secrets["azure"]["function_url"]  # Update with your actual URL
+function_key = st.secrets["azure"]["function_key"]
+
+url_with_key = f"{function_url}/cluster?code={function_key}"
 def call_backend(file_content: bytes, filename: str) -> dict:
     """
     Send file content to the backend for clustering
@@ -19,7 +24,10 @@ def call_backend(file_content: bytes, filename: str) -> dict:
         files = {'file': (filename, io.BytesIO(file_content), 'text/csv')}
         
         # Send POST request to backend - using BASE_URL from config
-        response = requests.post(f"{BASE_URL}/cluster", files=files)
+        response = requests.post(url_with_key,
+            json=payload,
+            headers={"Content-Type": "application/json"},
+            timeout=30)
         
         if response.status_code != 200:
             return {"error": f"HTTP {response.status_code}: {response.text}"}
