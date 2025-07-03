@@ -20,7 +20,7 @@ st.set_page_config(layout="wide")
 function_url = st.secrets["azure"]["function_url"]  # Update with your actual URL
 function_key = st.secrets["azure"]["function_key"]
 
-url_with_key = f"{function_url}?code={function_key}"
+url_with_key = f"{function_url}/get_company_data?code={function_key}"
 
 
 def call_azure_function(company_identifier):
