@@ -106,7 +106,7 @@ def main_app():
     st.title("Customer Clustering Frontend")
     
     # Header with company info and logout
-    col1, col2, col3 = st.columns([2, 1, 1])
+    col1, col2, col3 = st.columns([2, 2, 1])
     
     with col1:
         st.info(f"📊 **Company:** {st.session_state.company_identifier} | **Records:** {st.session_state.total_records}")
