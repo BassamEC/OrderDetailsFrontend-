@@ -6,6 +6,7 @@ import streamlit as st
 
 function_url = st.secrets["azure"]["function_url"]  # Update with your actual URL
 function_key = st.secrets["azure"]["function_key"]
+recommendation_url = st.secrets["azure"]["recommendation_url"]  # Ensure no trailing slash
 
 
 def call_backend(file_content: bytes, filename: str) -> dict:
@@ -127,5 +128,62 @@ def call_continent_analysis_backend(file_content, filename):
         return {"error":f"Could not connect to backend server. Please check if the server is running.  {str(e)}"}
     except requests.exceptions.RequestException as e:
         return {"error": f"Request failed: {str(e)}"}
+    except Exception as e:
+        return {"error": f"Unexpected error: {str(e)}"}
+    
+    
+# Add this function to your existing utilsfe.py file
+
+def call_potential_customers_backend(product_names):
+    """Call backend API to get potential customers for given product names"""
+    try:
+        # Replace with your actual backend URL
+        backend_url = f"{recommendation_url}/api/leads/potential-customers"
+        
+        payload = {
+            "product_ids": product_names  # API expects product_ids but it's actually names
+        }
+        
+        response = requests.post(
+            backend_url,
+            json=payload,
+            headers={"Content-Type": "application/json"},
+            timeout=60
+        )
+        
+        if response.status_code == 200:
+            return response.json()
+        else:
+            return {"error": f"Backend API error: {response.status_code} - {response.text}"}
+            
+    except requests.exceptions.RequestException as e:
+        return {"error": f"Backend API request failed: {str(e)}"}
+    except Exception as e:
+        return {"error": f"Unexpected error: {str(e)}"}
+
+def fetch_customer_details_from_blob(customer_ids):
+    """Fetch customer details from blob storage for given customer IDs"""
+    try:
+        # Replace with your actual backend URL for fetching customer details
+        backend_url = f"{recommendation_url}/api/customers/details"
+        
+        payload = {
+            "customer_ids": customer_ids
+        }
+        
+        response = requests.post(
+            backend_url,
+            json=payload,
+            headers={"Content-Type": "application/json"},
+            timeout=60
+        )
+        
+        if response.status_code == 200:
+            return response.json()
+        else:
+            return {"error": f"Backend API error: {response.status_code} - {response.text}"}
+            
+    except requests.exceptions.RequestException as e:
+        return {"error": f"Backend API request failed: {str(e)}"}
     except Exception as e:
         return {"error": f"Unexpected error: {str(e)}"}

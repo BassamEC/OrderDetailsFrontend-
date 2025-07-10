@@ -3,14 +3,17 @@ import pandas as pd
 import requests
 import json
 import io
-from utilsfe import call_backend, call_continent_analysis_backend 
+from utilsfe import call_backend, call_continent_analysis_backend, call_potential_customers_backend, fetch_customer_details_from_blob
 from ui_components import (
-    display_clustered_data, # Re-including in case you want to show it in results tab
+    display_clustered_data,
     create_and_display_heatmap,
     display_summary_statistics,
     display_top_countries_by_cluster,
-    render_backend_continent_analysis # Add the new function import
+    render_backend_continent_analysis,
+    render_potential_customers_results,  # Add this import
+    get_available_products  # Add this import
 )
+
 import matplotlib.pyplot as plt # Import plt to ensure we can close figures properly
 
 # Optional: Set page config to wide mode for better display
@@ -121,11 +124,12 @@ def main_app():
     # Get company data from session state
     df = st.session_state.company_data
     
-    # Create tabs - Same as your original app
-    tab_data_preview, tab_clustering_results, tab_continent_analysis = st.tabs([
+        # Create tabs - Same as your original app
+    tab_data_preview, tab_clustering_results, tab_continent_analysis, tab_potential_customers = st.tabs([
         "Data Preview", 
         "Clustering Results", 
-        "Continent Analysis"
+        "Continent Analysis",
+        "Potential Customers"
     ])
 
     with tab_data_preview:
@@ -225,7 +229,7 @@ def main_app():
                 if "error" in result:
                     st.error(f"Error: {result['error']}")
                 else:
-                    st.success("Analysis complete!")
+                    # st.success("Analysis complete!")
                     
                     # DEBUG: Show what backend returned
                     # st.write("Backend Response:")
@@ -233,8 +237,45 @@ def main_app():
                     
                     # ✅ Render continent analysis output
                     render_backend_continent_analysis(result)
+    with tab_potential_customers:
+        st.write("### 🎯 Find Potential Customers")
+        st.info("Select products to find potential customers who might be interested in them.")
+        
+        # Get available products
+        available_products = get_available_products(df)
+        
+        if not available_products:
+            st.warning("No products found in the data.")
+        else:
+            # Product selection
+            col1, col2 = st.columns([3, 1])
+            
+            with col1:
+                selected_products = st.multiselect(
+                    "Select Products",
+                    available_products,
+                    help="Choose one or more products to analyze"
+                )
+            
+            with col2:
+                st.write("")  # Empty space for alignment
+                st.write("")  # Empty space for alignment
+                analyze_button = st.button("🔍 Find Customers", disabled=not selected_products)
+            
+            # Show selected products count
+            # if selected_products:
+            #     st.success(f"Selected {len(selected_products)} product(s)")
 
-# Initialize session state
+            # Analysis results
+            if analyze_button and selected_products:
+                with st.spinner("Analyzing potential customers... This may take a moment."):
+                    result = call_potential_customers_backend(selected_products)
+                    
+                    if "error" in result:
+                        st.error(f"Error: {result['error']}")
+                    else:
+                        # st.success("Analysis complete!")
+                        render_potential_customers_results(result, df)
 if 'logged_in' not in st.session_state:
     st.session_state.logged_in = False
 

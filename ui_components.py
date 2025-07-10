@@ -260,3 +260,348 @@ def render_backend_continent_analysis(continent_data):
     with col3:
         avg_revenue_per_customer = total_revenue / total_customers if total_customers > 0 else 0
         st.metric("Avg Revenue/Customer", f"${avg_revenue_per_customer:.2f}")
+
+# Add these functions to your existing ui_components.py file
+
+import io
+from utilsfe import fetch_customer_details_from_blob
+
+def render_potential_customers_results(result, company_df):
+    """Render potential customers analysis results"""
+    if "error" in result:
+        st.error(f"Error: {result['error']}")
+        return
+    
+    # Process the backend result (product_name -> list of customer IDs)
+    all_customer_ids = set()
+    product_stats = []
+    
+    for product_name, customer_ids in result.items():
+        # Convert float IDs to integers for matching
+        customer_ids_int = [int(float(id)) for id in customer_ids]
+        all_customer_ids.update(customer_ids_int)
+        
+        product_stats.append({
+            "ProductName": product_name,
+            "CustomerCount": len(customer_ids_int),
+            "CustomerIDs": customer_ids_int
+        })
+    
+    # Display summary statistics only if there are potential customers
+    if len(all_customer_ids) > 0:
+        st.subheader("📊 Summary")
+        col1, col2, col3 = st.columns(3)
+        
+        with col1:
+            st.metric("Total Potential Customers", len(all_customer_ids))
+        with col2:
+            st.metric("Products Analyzed", len(result))
+        with col3:
+            avg_customers_per_product = len(all_customer_ids) / len(result) if result else 0
+            st.metric("Avg Customers per Product", f"{avg_customers_per_product:.1f}")
+    else:
+        st.info("🔍 No potential customers found for the selected products.")
+    
+    # Get customer details from the company dataframe first
+    customer_id_columns = ['CustomerID', 'ID', 'customer_id', 'id']
+    customer_id_col = None
+    
+    for col in customer_id_columns:
+        if col in company_df.columns:
+            customer_id_col = col
+            break
+    
+    potential_customers_df = pd.DataFrame()
+    missing_customer_ids = []
+    
+    if customer_id_col:
+        # Filter company data to get details for potential customers
+        company_customers = company_df[company_df[customer_id_col].isin(all_customer_ids)].copy()
+        
+        if not company_customers.empty:
+            potential_customers_df = company_customers
+            
+            # Find missing customer IDs (not in company data)
+            found_ids = set(company_customers[customer_id_col].unique())
+            missing_customer_ids = list(all_customer_ids - found_ids)
+        else:
+            missing_customer_ids = list(all_customer_ids)
+    else:
+        missing_customer_ids = list(all_customer_ids)
+    
+    # If there are missing customers, fetch automatically (no button)
+    if missing_customer_ids:
+        with st.spinner("Fetching missing customer details from database..."):
+            blob_result = fetch_customer_details_from_blob(missing_customer_ids)
+
+        if "error" in blob_result:
+            st.error(f"Error fetching customer details: {blob_result['error']}")
+        else:
+            if "customers" in blob_result and blob_result["customers"]:
+                blob_customers_df = pd.DataFrame(blob_result["customers"])
+                if not potential_customers_df.empty:
+                    potential_customers_df = pd.concat([potential_customers_df, blob_customers_df], ignore_index=True)
+                else:
+                    potential_customers_df = blob_customers_df
+
+                # Calculate unique customers after deduplication
+                customer_id_for_count = None
+                for col in ['CustomerID', 'ID', 'customer_id', 'id']:
+                    if col in potential_customers_df.columns:
+                        customer_id_for_count = col
+                        break
+                
+                if customer_id_for_count:
+                    unique_count = potential_customers_df[customer_id_for_count].nunique()
+                else:
+                    unique_count = len(potential_customers_df.drop_duplicates())
+                
+                st.success(f"✅ Fetched details for {unique_count} unique additional customers!")
+            else:
+                st.warning("No additional customer details found in database.")    
+    
+    # Display customer details if we have any
+    if not potential_customers_df.empty:
+        st.subheader("🎯 Potential Customers Details")
+        
+        # Define required columns
+        required_columns = ['CustomerID', 'FirstName', 'LastName', 'City', 'Country', 'Phone']
+        
+        # Check for alternative column names and create a mapping
+        column_mapping = {}
+        for req_col in required_columns:
+            if req_col in potential_customers_df.columns:
+                column_mapping[req_col] = req_col
+            else:
+                # Check for alternative names
+                alternatives = {
+                    'CustomerID': ['ID', 'customer_id', 'id'],
+                    'FirstName': ['first_name', 'First_Name', 'fname'],
+                    'LastName': ['last_name', 'Last_Name', 'lname'],
+                    'City': ['city'],
+                    'Country': ['country'],
+                    'Phone': ['phone', 'Phone_Number', 'PhoneNumber']
+                }
+                
+                found = False
+                for alt_name in alternatives.get(req_col, []):
+                    if alt_name in potential_customers_df.columns:
+                        column_mapping[req_col] = alt_name
+                        found = True
+                        break
+                
+                if not found:
+                    column_mapping[req_col] = None
+        
+        # Create display dataframe with only required columns
+        display_columns = []
+        for req_col in required_columns:
+            if column_mapping[req_col] is not None:
+                display_columns.append(column_mapping[req_col])
+        
+        if display_columns:
+            # Select only the required columns
+            display_df = potential_customers_df[display_columns].copy()
+            
+            # Rename columns to standard names
+            rename_dict = {v: k for k, v in column_mapping.items() if v is not None}
+            display_df = display_df.rename(columns=rename_dict)
+            
+            # Ensure we have the CustomerID column for deduplication
+            customer_id_for_dedup = None
+            for col in ['CustomerID', 'ID', 'customer_id', 'id']:
+                if col in display_df.columns:
+                    customer_id_for_dedup = col
+                    break
+            
+            # Remove duplicates based on CustomerID
+            if customer_id_for_dedup:
+                display_df = display_df.drop_duplicates(subset=[customer_id_for_dedup])
+            else:
+                # If no CustomerID column, remove duplicates based on all columns
+                display_df = display_df.drop_duplicates()
+            
+            # Display filters
+            col1, col2 = st.columns(2)
+            with col1:
+                if "Country" in display_df.columns:
+                    countries = ["All"] + sorted(display_df["Country"].dropna().unique().tolist())
+                    selected_country = st.selectbox("Filter by Country", countries)
+                else:
+                    selected_country = "All"
+            
+            with col2:
+                if "City" in display_df.columns:
+                    cities = ["All"] + sorted(display_df["City"].dropna().unique().tolist())
+                    selected_city = st.selectbox("Filter by City", cities)
+                else:
+                    selected_city = "All"
+            
+            # Apply filters
+            filtered_df = display_df.copy()
+            if selected_country != "All" and "Country" in filtered_df.columns:
+                filtered_df = filtered_df[filtered_df["Country"] == selected_country]
+            if selected_city != "All" and "City" in filtered_df.columns:
+                filtered_df = filtered_df[filtered_df["City"] == selected_city]
+            
+            # Display filtered results
+            st.write(f"Showing {len(filtered_df)} unique potential customers")
+            
+            st.dataframe(
+                filtered_df,
+                use_container_width=True,
+                hide_index=True
+            )
+            
+            # Download and Phone Numbers buttons
+            col1, col2 = st.columns(2)
+            
+            with col1:
+                # Download button
+                csv_buffer = io.StringIO()
+                filtered_df.to_csv(csv_buffer, index=False)
+                st.download_button(
+                    label="📥 Download Customer List (CSV)",
+                    data=csv_buffer.getvalue(),
+                    file_name=f"potential_customers_{pd.Timestamp.now().strftime('%Y%m%d_%H%M%S')}.csv",
+                    mime="text/csv"
+                )
+            
+            with col2:
+                # Phone Numbers button
+                if "Phone" in filtered_df.columns:
+                    phone_numbers = filtered_df["Phone"].dropna().unique()
+                    if len(phone_numbers) > 0:
+                        phone_list = "\n".join(phone_numbers.astype(str))
+                        st.download_button(
+                            label="📞 Download Phone Numbers",
+                            data=phone_list,
+                            file_name=f"customer_phones_{pd.Timestamp.now().strftime('%Y%m%d_%H%M%S')}.txt",
+                            mime="text/plain"
+                        )
+                    else:
+                        st.button("📞 No Phone Numbers", disabled=True)
+                else:
+                    st.button("📞 Phone Numbers Not Available", disabled=True)
+            
+            # Show phone numbers in expandable section
+            if "Phone" in filtered_df.columns:
+                with st.expander("📞 View Phone Numbers"):
+                    phone_columns = ["FirstName", "LastName", "Phone", "Country"]
+                    available_phone_columns = [col for col in phone_columns if col in filtered_df.columns]
+                    
+                    if available_phone_columns:
+                        phone_data = filtered_df[available_phone_columns].copy()
+                        phone_data = phone_data.dropna(subset=["Phone"])
+                        
+                        if not phone_data.empty:
+                            st.dataframe(phone_data, use_container_width=True, hide_index=True)
+                            st.write(f"Total unique phone numbers: {len(phone_data)}")
+                        else:
+                            st.write("No phone numbers available for the filtered customers.")
+                    else:
+                        st.write("Phone number columns not available.")
+        else:
+            st.warning("Required columns (CustomerID, FirstName, LastName, City, Country, Phone) not found in the data.")
+    
+    else:
+        # Check if we have any customer IDs at all
+        if all_customer_ids:
+            st.warning("No customer details available. Try fetching from the database using the button above.")
+    
+    # Display product-wise breakdown
+    if product_stats and any(stat['CustomerCount'] > 0 for stat in product_stats):
+        st.subheader("📦 Product-wise Breakdown")
+        
+        breakdown_df = pd.DataFrame(product_stats)
+        
+        # Display breakdown table
+        st.dataframe(
+            breakdown_df[["ProductName", "CustomerCount"]], 
+            use_container_width=True, 
+            hide_index=True
+        )
+        
+        # Show customers interested in each product
+        with st.expander("👥 Customers by Product Interest"):
+            for product_stat in product_stats:
+                st.write(f"**{product_stat['ProductName']}** ({product_stat['CustomerCount']} customers)")
+                
+                # Get customer details for this product
+                product_customer_ids = product_stat['CustomerIDs']
+                
+                # Check if there are any customer IDs for this product
+                if not product_customer_ids:
+                    st.write("❌ No leads for this product")
+                    st.write("---")  # Separator between products
+                    continue
+                
+                if not potential_customers_df.empty:
+                    # Find the customer ID column
+                    customer_id_for_filter = None
+                    for col in ['CustomerID', 'ID', 'customer_id', 'id']:
+                        if col in potential_customers_df.columns:
+                            customer_id_for_filter = col
+                            break
+                    
+                    if customer_id_for_filter:
+                        # Filter customers for this product
+                        product_customers = potential_customers_df[
+                            potential_customers_df[customer_id_for_filter].isin(product_customer_ids)
+                        ].copy()
+                        
+                        # Select only name and phone columns
+                        display_columns = []
+                        column_mapping = {}
+                        
+                        # Map FirstName
+                        for col in ['FirstName', 'first_name', 'First_Name', 'fname']:
+                            if col in product_customers.columns:
+                                display_columns.append(col)
+                                column_mapping[col] = 'FirstName'
+                                break
+                        
+                        # Map LastName
+                        for col in ['LastName', 'last_name', 'Last_Name', 'lname']:
+                            if col in product_customers.columns:
+                                display_columns.append(col)
+                                column_mapping[col] = 'LastName'
+                                break
+                        
+                        # Map Phone
+                        for col in ['Phone', 'phone', 'Phone_Number', 'PhoneNumber']:
+                            if col in product_customers.columns:
+                                display_columns.append(col)
+                                column_mapping[col] = 'Phone'
+                                break
+                        
+                        if display_columns:
+                            product_display = product_customers[display_columns].copy()
+                            product_display = product_display.rename(columns=column_mapping)
+                            
+                            # Remove duplicates
+                            product_display = product_display.drop_duplicates()
+                            
+                            # Sort by name for better readability
+                            if 'FirstName' in product_display.columns:
+                                product_display = product_display.sort_values('FirstName')
+                            
+                            st.dataframe(
+                                product_display,
+                                use_container_width=True,
+                                hide_index=True
+                            )
+                        else:
+                            st.write("Customer details not available for this product.")
+                    else:
+                        st.write("Customer ID column not found.")
+                else:
+                    st.write("No customer details available.")
+                
+                st.write("---")  # Separator between products
+                
+def get_available_products(df):
+    """Get list of available products from the dataframe"""
+    if "ProductName" in df.columns:
+        return sorted(df["ProductName"].dropna().unique().tolist())
+    return []
